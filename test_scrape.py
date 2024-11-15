@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
-import re
+import numpy as np
+
 domain = "https://hsquizbowl.org/db/"
 url = "https://hsquizbowl.org/db/tournaments/9209/stats/round_robin_%281-11%29/rounds/"
 
@@ -26,9 +27,20 @@ tournaments = [["Penn Bowl 2024", "https://hsquizbowl.org/db/tournaments/9209/st
                ["C++", "https://hsquizbowl.org/db/tournaments/7944/stats/combined/games/#round-1"],
                ["ACF Regionals 2023", "https://hsquizbowl.org/db/tournaments/7982/stats/combined/games/#round-1"],
                ["SCT D2 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d2_all/games/#round-1"],
-               ["SCT D1 2023", ]]
+               ["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", "sqbs"],
+               ]
 
-def parse_team_line(team_line):
+#structure of game:
+#[[team_name_a, [player_1, ...]], team_a_pts, [team_name_b, [player_2, ...]], team_b_pts]
+#structure of player:
+#[player_name, tuh, powers, tens, negs]
+
+def tu_points(team):
+    s = 0
+    for player in team[1]:
+        s+= 15*player[2]+10*player[3]-5*player[4]
+    return s
+def parse_team_line_sqbs(team_line, tu_per_game):
     team_name, players = team_line.split(': ')
     players = players.split(', ')
     team = [team_name]
@@ -36,9 +48,9 @@ def parse_team_line(team_line):
         name = player[:player.find('(')-1]
         player = player[player.find(')')+2:]
         scores = [int(word) for word in player.split()[:3]]
-        team.append([[name]+scores])
+        team.append([[name, 24]+scores])
     return team
-def get_games_from_rounds_sqbs(scoreboard_url):
+def get_games_from_rounds_sqbs(scoreboard_url, tu_per_game):
     response = requests.get(scoreboard_url)
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -49,10 +61,11 @@ def get_games_from_rounds_sqbs(scoreboard_url):
     game_reports = []
     for game in games:
         stripped_lines = [line.strip() for line in game.stripped_strings]
-        team_a = parse_team_line(stripped_lines[0])
-        team_b = parse_team_line(stripped_lines[1])
+        team_a = parse_team_line_sqbs(stripped_lines[0], tu_per_game)
+        team_b = parse_team_line_sqbs(stripped_lines[1], tu_per_game)
         bpts_a, bpts_b = [int(word) for word in stripped_lines[2].split() if word.isdigit()][1::2]
-        game_reports.append([team_a, bpts_a, team_b, bpts_b])
+        
+        game_reports.append([team_a, bpts_a+tu_points(team_a), team_b, bpts_b+tu_points(team_b)])
     return game_reports
 def get_games_from_rounds(rounds_url):
     response = requests.get(rounds_url)
@@ -81,23 +94,41 @@ def get_games_from_rounds(rounds_url):
                 fields = rows[i].find_all('td')
                 player = fields[0].get_text(strip=True)
                 if(player != "Total"):
-                    team_a_players.append([player, fields[1].get_text(strip=True), fields[2].get_text(strip=True), fields[3].get_text(strip=True), fields[4].get_text(strip=True)])
+                    team_a_players.append([player, int(fields[1].get_text(strip=True)), int(fields[2].get_text(strip=True)), int(fields[3].get_text(strip=True)), int(fields[4].get_text(strip=True))])
                 else:
                         break
         for i in range(1, 5):
                 fields = rows[i].find_all('td')
                 player = fields[7].get_text(strip=True)
                 if(player != "Total"):
-                    team_b_players.append([player, fields[8].get_text(strip=True), fields[9].get_text(strip=True), fields[10].get_text(strip=True), fields[11].get_text(strip=True)])
+                    team_b_players.append([player, int(fields[8].get_text(strip=True)), int(fields[9].get_text(strip=True)), int(fields[10].get_text(strip=True)), int(fields[11].get_text(strip=True))])
                 else:
                         break
         game_csvs.append([team_a, team_b, score_a, score_b, team_a_players, team_b_players])
     return(game_csvs)    
 
-#playtime_url = "https://hsquizbowl.org/db/tournaments/9116/stats/combined/games/#round-3"
-#games = get_games_from_rounds(playtime_url)
+dtype = [("tournament_name", "U100"), ("team_a", "U100"), ("team_a_score", "i4"), 
+         ("team_a_player_1", "U50"), ("team_a_player_1_tuh", "i4"), ("team_a_player_1_powers", "i4"), ("team_a_player_1_gets", "i4"), ("team_a_player_1_negs", "i4"),
+         ("team_a_player_2", "U50"), ("team_a_player_2_tuh", "i4"), ("team_a_player_2_powers", "i4"), ("team_a_player_2_gets", "i4"), ("team_a_player_2_negs", "i4"),
+         ("team_a_player_3", "U50"), ("team_a_player_3_tuh", "i4"), ("team_a_player_3_powers", "i4"), ("team_a_player_3_gets", "i4"), ("team_a_player_3_negs", "i4"),
+         ("team_a_player_4", "U50"), ("team_a_player_4_tuh", "i4"), ("team_a_player_4_powers", "i4"), ("team_a_player_4_gets", "i4"), ("team_a_player_4_negs", "i4"),
+         ("team_b", "U100"), ("team_b_score", "i4"), 
+         ("team_b_player_1", "U50"), ("team_b_player_1_tuh", "i4"), ("team_b_player_1_powers", "i4"), ("team_b_player_1_gets", "i4"), ("team_b_player_1_negs", "i4"),
+         ("team_b_player_2", "U50"), ("team_b_player_2_tuh", "i4"), ("team_b_player_2_powers", "i4"), ("team_b_player_2_gets", "i4"), ("team_b_player_2_negs", "i4"),
+         ("team_b_player_3", "U50"), ("team_b_player_3_tuh", "i4"), ("team_b_player_3_powers", "i4"), ("team_b_player_3_gets", "i4"), ("team_b_player_3_negs", "i4"),
+         ("team_b_player_4", "U50"), ("team_b_player_4_tuh", "i4"), ("team_b_player_4_powers", "i4"), ("team_b_player_4_gets", "i4"), ("team_b_player_4_negs", "i4"),
+         ]
 
+def urls_to_csv(url_list):
+    games = []
+    for elem in url_list:
+        pass
+
+playtime_url = "https://hsquizbowl.org/db/tournaments/9116/stats/combined/games/#round-3"
+games = get_games_from_rounds(playtime_url)
+print(games[0])
 sct_url = "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/"
 games = get_games_from_rounds_sqbs(sct_url)
 for game in games:
-     print(game)
+    pass
+    #print(game)
