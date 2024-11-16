@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import numpy as np
+import pandas as pd
 
 domain = "https://hsquizbowl.org/db/"
 url = "https://hsquizbowl.org/db/tournaments/9209/stats/round_robin_%281-11%29/rounds/"
@@ -17,7 +18,7 @@ tournaments = [["Penn Bowl 2024", "https://hsquizbowl.org/db/tournaments/9209/st
                ["SCT D2 2024", "https://hsquizbowl.org/db/tournaments/8703/stats/d2_all/games/#round-1"],
                ["SCT D1 2024", "https://hsquizbowl.org/db/tournaments/8703/stats/d1/games/#round-1"],
                ["ACF Regionals 2024", "https://hsquizbowl.org/db/tournaments/8698/stats/prelims/games/#round-1"],
-               ["ACF Regionals 2024", "https://hsquizbowl.org/db/tournaments/8698/stats/finals/rounds/"],
+               ["ACF Regionals 2024", "https://hsquizbowl.org/db/tournaments/8698/stats/finals/games/#round-12"],
                ["ILLIAC", "https://hsquizbowl.org/db/tournaments/8679/stats/all_games/games/#round-1"],
                ["ACF Winter 2023", "https://hsquizbowl.org/db/tournaments/8536/stats/combined/games/#round-1"],
                ["ACF Fall 2023", "https://hsquizbowl.org/db/tournaments/8328/stats/playoffs/games/#round-1"],
@@ -71,7 +72,12 @@ def get_games_from_rounds(rounds_url):
     response = requests.get(rounds_url)
     if response.status_code == 200:
         soup = BeautifulSoup(response.content, 'html.parser')
-        games = soup.find_all('table')[3:]
+        games = soup.find_all('table')[2:]
+        try:
+            if not "Total" in games[0].text:
+                games=games[1:]
+        except:
+            raise ValueError("url {url} did not produce games")
     else:
         raise ValueError("Website {rounds_url} not accessible")
     game_csvs=[]
@@ -86,9 +92,13 @@ def get_games_from_rounds(rounds_url):
         if(scoreline[:len(team_a)]==team_a):
             score_a, score_b = scoreline[len(team_a)+1:].split(',', 1)
             score_b = score_b[len(team_b)+2:]
+            if "(OT)" in score_b:
+                score_b = score_b[:len(score_b)-5]
         else:
             score_b, score_a = scoreline[len(team_b)+1:].split(',', 1)
-            score_a = score_b[len(team_a)+2:]
+            score_a = score_a[len(team_a)+2:]
+            if "(OT)" in score_a:
+                score_a = score_a[:len(score_a)-5]
         
         for i in range(1, 5):
                 fields = rows[i].find_all('td')
@@ -104,7 +114,7 @@ def get_games_from_rounds(rounds_url):
                     team_b_players.append([player, int(fields[8].get_text(strip=True)), int(fields[9].get_text(strip=True)), int(fields[10].get_text(strip=True)), int(fields[11].get_text(strip=True))])
                 else:
                         break
-        game_csvs.append([team_a, team_b, score_a, score_b, team_a_players, team_b_players])
+        game_csvs.append([team_a, team_b, int(score_a), int(score_b), team_a_players, team_b_players])
     return(game_csvs)    
 
 dtype = [("tournament_name", "U100"), ("team_a", "U100"), ("team_a_score", "i4"), 
@@ -126,7 +136,7 @@ def urls_to_nparray(url_list):
             tname, url, _ = elem
             games = get_games_from_rounds_sqbs(url, 24)
         else:
-            name, url = elem
+            tname, url = elem
             games = get_games_from_rounds(url)
         for game in games:
             team_a, team_b, score_a, score_b, players_a, players_b = game
@@ -152,6 +162,7 @@ def urls_to_nparray(url_list):
 #print(games[0])
 #games = get_games_from_rounds_sqbs(sct_url)
 
-urls = [["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", "sqbs"]]
-df = urls_to_nparray(urls)
-print(df)
+#test_urls = [["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", "sqbs"]]
+df = pd.DataFrame(urls_to_nparray(tournaments))
+df.to_csv('games.csv', index = False)
+#print(get_games_from_rounds(tournaments[8][1]))
