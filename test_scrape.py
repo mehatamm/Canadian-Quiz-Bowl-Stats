@@ -37,19 +37,19 @@ tournaments = [["Penn Bowl 2024", "https://hsquizbowl.org/db/tournaments/9209/st
 
 def tu_points(team):
     s = 0
-    for player in team[1]:
+    for player in team:
         s+= 15*player[2]+10*player[3]-5*player[4]
     return s
 def parse_team_line_sqbs(team_line, tu_per_game):
     team_name, players = team_line.split(': ')
     players = players.split(', ')
-    team = [team_name]
+    team_players = []
     for player in players:
         name = player[:player.find('(')-1]
         player = player[player.find(')')+2:]
         scores = [int(word) for word in player.split()[:3]]
-        team.append([[name, 24]+scores])
-    return team
+        team_players.append([name, 24]+scores)
+    return team_name, team_players
 def get_games_from_rounds_sqbs(scoreboard_url, tu_per_game):
     response = requests.get(scoreboard_url)
     if response.status_code == 200:
@@ -61,11 +61,11 @@ def get_games_from_rounds_sqbs(scoreboard_url, tu_per_game):
     game_reports = []
     for game in games:
         stripped_lines = [line.strip() for line in game.stripped_strings]
-        team_a = parse_team_line_sqbs(stripped_lines[0], tu_per_game)
-        team_b = parse_team_line_sqbs(stripped_lines[1], tu_per_game)
+        a_name, a_players = parse_team_line_sqbs(stripped_lines[0], tu_per_game)
+        b_name, b_players = parse_team_line_sqbs(stripped_lines[1], tu_per_game)
         bpts_a, bpts_b = [int(word) for word in stripped_lines[2].split() if word.isdigit()][1::2]
         
-        game_reports.append([team_a, bpts_a+tu_points(team_a), team_b, bpts_b+tu_points(team_b)])
+        game_reports.append([a_name, b_name, bpts_a+tu_points(a_players), bpts_b+tu_points(b_players), a_players, b_players])
     return game_reports
 def get_games_from_rounds(rounds_url):
     response = requests.get(rounds_url)
@@ -119,16 +119,39 @@ dtype = [("tournament_name", "U100"), ("team_a", "U100"), ("team_a_score", "i4")
          ("team_b_player_4", "U50"), ("team_b_player_4_tuh", "i4"), ("team_b_player_4_powers", "i4"), ("team_b_player_4_gets", "i4"), ("team_b_player_4_negs", "i4"),
          ]
 
-def urls_to_csv(url_list):
-    games = []
+def urls_to_nparray(url_list):
+    games_list = []
     for elem in url_list:
-        pass
+        if(len(elem) == 3):
+            tname, url, _ = elem
+            games = get_games_from_rounds_sqbs(url, 24)
+        else:
+            name, url = elem
+            games = get_games_from_rounds(url)
+        for game in games:
+            team_a, team_b, score_a, score_b, players_a, players_b = game
+            for _ in range(4-len(players_a)):
+                players_a.append(["None", 0, 0, 0, 0])
+            for _ in range(4-len(players_b)):
+                players_b.append(["None", 0, 0, 0, 0])
+            games_list.append((tname, team_a, score_a, 
+            players_a[0][0], players_a[0][1], players_a[0][2], players_a[0][3], players_a[0][4],
+            players_a[1][0], players_a[1][1], players_a[1][2], players_a[1][3], players_a[1][4],
+            players_a[2][0], players_a[2][1], players_a[2][2], players_a[2][3], players_a[2][4],
+            players_a[3][0], players_a[3][1], players_a[3][2], players_a[3][3], players_a[3][4],
+            team_b, score_b,
+            players_b[0][0], players_b[0][1], players_b[0][2], players_b[0][3], players_b[0][4],
+            players_b[1][0], players_b[1][1], players_b[1][2], players_b[1][3], players_b[1][4],
+            players_b[2][0], players_b[2][1], players_b[2][2], players_b[2][3], players_b[2][4],
+            players_b[3][0], players_b[3][1], players_b[3][2], players_b[3][3], players_b[3][4],)
+            )
+    games = np.array(games_list, dtype=dtype)
+    return games
+#playtime_url = "https://hsquizbowl.org/db/tournaments/9116/stats/combined/games/#round-3"
+#games = get_games_from_rounds(playtime_url)
+#print(games[0])
+#games = get_games_from_rounds_sqbs(sct_url)
 
-playtime_url = "https://hsquizbowl.org/db/tournaments/9116/stats/combined/games/#round-3"
-games = get_games_from_rounds(playtime_url)
-print(games[0])
-sct_url = "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/"
-games = get_games_from_rounds_sqbs(sct_url)
-for game in games:
-    pass
-    #print(game)
+urls = [["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", "sqbs"]]
+df = urls_to_nparray(urls)
+print(df)
