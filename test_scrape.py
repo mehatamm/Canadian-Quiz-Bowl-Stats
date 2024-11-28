@@ -28,7 +28,21 @@ tournaments = [["Penn Bowl 2024", "https://hsquizbowl.org/db/tournaments/9209/st
                ["C++", "https://hsquizbowl.org/db/tournaments/7944/stats/combined/games/#round-1"],
                ["ACF Regionals 2023", "https://hsquizbowl.org/db/tournaments/7982/stats/combined/games/#round-1"],
                ["SCT D2 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d2_all/games/#round-1"],
-               ["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", "sqbs"],
+               ["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", 24],
+               ["MRNA II Carleton", "https://hsquizbowl.org/db/tournaments/8064/stats/all_games/games/#round-1"],
+               ["ACF Winter 2024", "https://hsquizbowl.org/db/tournaments/9108/stats/combined/games/#round-1"],
+               ["MRNA II Waterloo", "https://hsquizbowl.org/db/tournaments/8043/stats/combined/games/#round-1"],
+               ["Arcadia 2022", "https://hsquizbowl.org/db/tournaments/7803/stats/all_games/games/#round-1"],
+               ["Penn Bowl 2022", "https://hsquizbowl.org/db/tournaments/7749/stats/round_robin/games/#round-1"],
+               ["ACF Fall 2022", "https://hsquizbowl.org/db/tournaments/7650/stats/all_games/games/#round-1"],
+               ["COOT 2024", "https://hsquizbowl.org/db/tournaments/8968/stats/all_games/games/#round-1"],
+               ["HSNCT 2023", "https://hsquizbowl.org/db/tournaments/8224/stats/saturday_all_games/games/#round-1"],
+               ["HSNCT 2023", "https://hsquizbowl.org/db/tournaments/8224/stats/sunday_all_games/games/#round-1"],
+               ["ARGOS", "https://hsquizbowl.org/db/tournaments/9134/stats/argos_%28combined%29/games/#round-1"],
+               ["COOT 2023", "https://hsquizbowl.org/db/tournaments/8301/stats/overall_stats/games/#round-1"],
+               ["UG Nats 2024", "https://hsquizbowl.org/db/tournaments/8965/stats/all_games/games/#round-1"],
+               ["BHSU", "https://hsquizbowl.org/db/tournaments/8186/stats/all_games/games/#round-1"],
+               ["NASAT 2023", "https://hsquizbowl.org/db/tournaments/8235/stats/all_games/games/#round-1"]
                ]
 
 #structure of game:
@@ -49,7 +63,7 @@ def parse_team_line_sqbs(team_line, tu_per_game):
         name = player[:player.find('(')-1]
         player = player[player.find(')')+2:]
         scores = [int(word) for word in player.split()[:3]]
-        team_players.append([name, 24]+scores)
+        team_players.append([name, tu_per_game]+scores)
     return team_name, team_players
 def get_games_from_rounds_sqbs(scoreboard_url, tu_per_game):
     response = requests.get(scoreboard_url)
@@ -85,7 +99,7 @@ def get_games_from_rounds(rounds_url):
         rows = table.find_all('tr')
         row_0_cols = rows[0].find_all('b')
         team_a = row_0_cols[0].get_text(strip=True)
-        team_b = row_0_cols[6].get_text(strip=True)
+        team_b = row_0_cols[5 if len(row_0_cols) == 10 else 6].get_text(strip=True)
         team_a_players = []
         team_b_players = []
         scoreline = table.find_previous_sibling().get_text(strip=True)
@@ -104,16 +118,23 @@ def get_games_from_rounds(rounds_url):
                 fields = rows[i].find_all('td')
                 player = fields[0].get_text(strip=True)
                 if(player != "Total"):
-                    team_a_players.append([player, int(fields[1].get_text(strip=True)), int(fields[2].get_text(strip=True)), int(fields[3].get_text(strip=True)), int(fields[4].get_text(strip=True))])
+                    if(len(fields) == 11): #no powers
+                        team_a_players.append([player, int(fields[1].get_text(strip=True)), 0, int(fields[2].get_text(strip=True)), int(fields[3].get_text(strip=True))])
+                    else:
+                        team_a_players.append([player, int(fields[1].get_text(strip=True)), int(fields[2].get_text(strip=True)), int(fields[3].get_text(strip=True)), int(fields[4].get_text(strip=True))])
                 else:
-                        break
+                    break
         for i in range(1, 5):
                 fields = rows[i].find_all('td')
-                player = fields[7].get_text(strip=True)
+                player = fields[6 if len(fields) == 11 else 7].get_text(strip=True)
                 if(player != "Total"):
-                    team_b_players.append([player, int(fields[8].get_text(strip=True)), int(fields[9].get_text(strip=True)), int(fields[10].get_text(strip=True)), int(fields[11].get_text(strip=True))])
+                    if(len(fields) == 11):
+                        team_b_players.append([player, int(fields[7].get_text(strip=True)), 0, int(fields[8].get_text(strip=True)), int(fields[9].get_text(strip=True))])
+                    else:
+                        team_b_players.append([player, int(fields[8].get_text(strip=True)), int(fields[9].get_text(strip=True)), int(fields[10].get_text(strip=True)), int(fields[11].get_text(strip=True))])
+
                 else:
-                        break
+                    break
         game_csvs.append([team_a, team_b, int(score_a), int(score_b), team_a_players, team_b_players])
     return(game_csvs)    
 
@@ -133,11 +154,15 @@ def urls_to_nparray(url_list):
     games_list = []
     for elem in url_list:
         if(len(elem) == 3):
-            tname, url, _ = elem
-            games = get_games_from_rounds_sqbs(url, 24)
+            tname, url, tu_per_game = elem
+            games = get_games_from_rounds_sqbs(url, tu_per_game)
         else:
             tname, url = elem
-            games = get_games_from_rounds(url)
+            try:
+                games = get_games_from_rounds(url)
+            except:
+                print(url)
+                return
         for game in games:
             team_a, team_b, score_a, score_b, players_a, players_b = game
             for _ in range(4-len(players_a)):
@@ -166,3 +191,9 @@ def urls_to_nparray(url_list):
 df = pd.DataFrame(urls_to_nparray(tournaments))
 df.to_csv('games.csv', index = False)
 #print(get_games_from_rounds(tournaments[8][1]))
+
+#test_url = "https://hsquizbowl.org/db/tournaments/7650/stats/all_games/games/#round-1"
+
+#games = get_games_from_rounds(test_url)
+
+#print(games)
