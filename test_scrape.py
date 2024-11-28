@@ -189,6 +189,22 @@ def urls_to_nparray(url_list):
 
 #test_urls = [["SCT D1 2023", "https://hsquizbowl.org/db/tournaments/7863/stats/d1_finals/games/", "sqbs"]]
 df = pd.DataFrame(urls_to_nparray(tournaments))
+
+player_a_cols = ["team_a_player_1", "team_a_player_2", "team_a_player_3", "team_a_player_4"]
+
+player_b_cols = ["team_b_player_1", "team_b_player_2", "team_b_player_3", "team_b_player_4"]
+
+
+def clean_player_names():
+    for index, row in df.iterrows():
+        for col in player_a_cols+player_b_cols:
+            if(isinstance(row[col], str) and "(UG)" in row[col]):
+                df.loc[index, col] = df.loc[index, col][:-5]
+            if(isinstance(row[col], str) and "(DII)" in row[col]):
+                df.loc[index, col] = df.loc[index, col][:-6]
+
+clean_player_names()
+
 df.to_csv('games.csv', index = False)
 #print(get_games_from_rounds(tournaments[8][1]))
 
